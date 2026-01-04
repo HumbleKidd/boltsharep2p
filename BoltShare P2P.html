@@ -1,0 +1,312 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+<div id="bolt-share-armor-pro">
+    <nav class="armor-nav">
+        <div class="nav-container">
+            <div class="brand">
+                <svg viewBox="0 0 24 24" class="icon-bolt"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <span>BoltShare PRO</span>
+            </div>
+            <div class="system-status">
+                <span class="pulse-dot" id="peer-pulse"></span> <span id="node-label">P2P Node Active</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="armor-viewport">
+        <div class="dual-layout">
+            <div class="card glass">
+                <div class="card-header">
+                    <h3>Device Link</h3>
+                    <span class="badge" id="conn-status">Standby</span>
+                </div>
+                
+                <div class="qr-container">
+                    <div id="qr-display" class="qr-view active">
+                         <div id="real-qr-target"></div>
+                         <p class="qr-label">SCAN TO SYNC DEVICES</p>
+                    </div>
+                    <div id="scanner-view" class="qr-view">
+                        <video id="scanner-video" autoplay playsinline></video>
+                        <div class="scan-overlay"></div>
+                    </div>
+                </div>
+
+                <div class="qr-toggle-bar">
+                    <button class="btn-mini" onclick="BoltPro.toggleScanner(false)">My QR</button>
+                    <button class="btn-mini" onclick="BoltPro.toggleScanner(true)">Scan Peer</button>
+                </div>
+
+                <div class="input-stack">
+                    <input type="text" id="peer-id-input" placeholder="Paste Peer ID...">
+                    <button class="btn-glow" onclick="BoltPro.connectToPeer()">Link</button>
+                </div>
+                <p class="meta-text">My ID: <strong id="my-id">...</strong> <button class="btn-mini" onclick="BoltPro.copyID()">Copy</button></p>
+            </div>
+
+            <div class="card glass">
+                <h3>Zero-Lag Upload</h3>
+                <div class="drop-target" id="drop-target" onclick="document.getElementById('file-engine').click()">
+                    <input type="file" id="file-engine" hidden multiple onchange="BoltPro.stageFiles(this.files)">
+                    <div class="icon-circle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="icon-up">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <p class="upload-label">INSTANT DROP</p>
+                    <span class="upload-sub">Files sync automatically to linked devices</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="active-queue-header">Live Assets Feed</div>
+        <div id="transfer-queue" class="queue-list"></div>
+    </main>
+
+    <div id="preview-modal" class="modal" onclick="BoltPro.closePreview()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div id="preview-body" class="media-container"></div>
+            <div class="modal-actions">
+                <button class="btn-glow" id="modal-dl-btn">Download</button>
+                <button class="btn-sec" id="modal-del-btn" style="color:#ff4444; border-color:#ff4444">Remove</button>
+                <button class="btn-sec" onclick="BoltPro.closePreview()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Design remains 100% locked and mobile-optimized as per previous versions */
+#bolt-share-armor-pro { --primary: #00f2ff; --bg-deep: #05070a; --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); --text: #e2e8f0; background: var(--bg-deep); color: var(--text); min-height: 100vh; font-family: sans-serif; overflow-x: hidden; }
+.armor-nav { background: rgba(10, 15, 25, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.nav-container { max-width: 1100px; margin: 0 auto; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--primary); }
+.icon-bolt { width: 24px; fill: var(--primary); }
+.system-status { font-size: 11px; color: #22c55e; display: flex; align-items: center; gap: 6px; font-weight: bold; }
+.pulse-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 10px #22c55e; }
+.armor-viewport { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+.dual-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2.5rem; }
+.card.glass { background: var(--glass); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; }
+.qr-container { height: 210px; background: #fff; border-radius: 12px; margin: 1rem 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#real-qr-target img { width: 150px !important; height: 150px !important; }
+.qr-view { display: none; width: 100%; height: 100%; align-items: center; justify-content: center; flex-direction: column; }
+.qr-view.active { display: flex; }
+.qr-label { color: #000; font-size: 10px; font-weight: 900; margin-top: 8px; }
+.drop-target { height: 240px; border: 2px dashed var(--border); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+.icon-circle { width: 64px; height: 64px; background: rgba(0, 242, 255, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary); }
+.transfer-strip { background: var(--glass); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border: 1px solid var(--border); }
+.instant-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.btn-action { background: var(--primary); color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.98); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.modal-content { background: #111; border-radius: 20px; width: 100%; max-width: 900px; border: 1px solid var(--border); overflow: hidden; }
+.media-container { width: 100%; max-height: 70vh; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+.media-container iframe, .media-container img, .media-container video { width: 100%; height: 500px; border: none; object-fit: contain; background: white; }
+.text-preview { background: #fff; color: #000; width: 100%; height: 500px; padding: 30px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; text-align: left; }
+.modal-actions { padding: 20px; display: flex; justify-content: center; gap: 10px; border-top: 1px solid var(--border); background: #161616; flex-wrap: wrap; }
+.btn-glow { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.btn-sec { background: transparent; border: 1px solid var(--border); color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer; }
+.badge { background: var(--primary); color: #000; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; }
+@media (max-width: 768px) {
+    .dual-layout { grid-template-columns: 1fr; gap: 1rem; }
+    .transfer-strip { padding: 12px; }
+    .transfer-strip div[style*="font-weight:700"] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .btn-action { padding: 6px 10px; font-size: 10px; }
+}
+</style>
+
+<script>
+const BoltPro = (() => {
+    let db = null;
+    let peer = null;
+    let conn = null;
+    let stream = null;
+    const cache = new Map();
+
+    const init = async () => {
+        setupPeer();
+        await setupDB();
+        loadHistory();
+    };
+
+    const setupPeer = () => {
+        peer = new Peer('BOLT-' + Math.floor(Math.random() * 90000 + 10000));
+        peer.on('open', id => {
+            document.getElementById('my-id').innerText = id;
+            new QRCode(document.getElementById('real-qr-target'), { text: id, width: 150, height: 150 });
+        });
+
+        peer.on('connection', c => {
+            conn = c;
+            setupConnHandlers();
+        });
+    };
+
+    const setupConnHandlers = () => {
+        document.getElementById('conn-status').innerText = "Linked";
+        document.getElementById('conn-status').style.background = "#22c55e";
+        
+        // When connected, send our existing file list to the other device
+        const fileList = Array.from(cache.values()).map(f => ({
+            id: f.id, name: f.name, type: f.type, isText: f.isText, isHTML: f.isHTML, time: f.time
+        }));
+        conn.send({ type: 'INIT_SYNC', files: fileList });
+
+        conn.on('data', data => {
+            if (data.type === 'INIT_SYNC') {
+                data.files.forEach(f => renderItem(f, true));
+            }
+            if (data.type === 'FILE_REQUEST') {
+                const item = cache.get(data.id);
+                conn.send({ type: 'FILE_DATA', id: item.id, raw: item.raw });
+            }
+            if (data.type === 'FILE_DATA') {
+                const blob = new Blob([data.raw], { type: data.type });
+                const fastURL = URL.createObjectURL(blob);
+                const item = { ...data, data: fastURL };
+                cache.set(item.id, item);
+                // Update UI or notification
+            }
+        });
+    };
+
+    const setupDB = () => {
+        return new Promise((resolve) => {
+            const req = indexedDB.open("BoltSpeed_P2P", 1);
+            req.onupgradeneeded = (e) => e.target.result.createObjectStore("files", { keyPath: "id" });
+            req.onsuccess = (e) => { db = e.target.result; resolve(); };
+        });
+    };
+
+    const stageFiles = async (files) => {
+        for (const file of Array.from(files)) {
+            const id = 'f' + Date.now() + Math.random().toString(36).substr(2,3);
+            const isHTML = file.name.endsWith('.html') || file.type === 'text/html';
+            const isText = (file.type.startsWith('text/') || file.name.endsWith('.txt')) && !isHTML;
+            const fastURL = URL.createObjectURL(file);
+            
+            const item = { id, name: file.name, type: file.type, data: fastURL, raw: file, time: Date.now(), isText, isHTML };
+            renderItem(item);
+            cache.set(id, item);
+
+            // If connected, notify peer of new file
+            if (conn && conn.open) {
+                conn.send({ type: 'INIT_SYNC', files: [item] });
+            }
+        }
+    };
+
+    const loadHistory = () => {
+        const tx = db.transaction("files", "readonly");
+        tx.objectStore("files").openCursor().onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const item = cursor.value;
+                item.data = URL.createObjectURL(item.raw);
+                cache.set(item.id, item);
+                renderItem(item);
+                cursor.continue();
+            }
+        };
+    };
+
+    const renderItem = (item, isRemote = false) => {
+        if (document.getElementById(`strip-${item.id}`)) return;
+        const html = `
+            <div class="transfer-strip" id="strip-${item.id}">
+                <div>
+                    <div style="font-weight:700; font-size:14px; color:var(--primary)">${item.name}</div>
+                    <div style="font-size:10px; opacity:0.5; margin-top:4px">${isRemote ? 'Remote Asset' : 'Local Asset'}</div>
+                </div>
+                <div class="instant-actions">
+                    <button class="btn-action" onclick="BoltPro.openPreview('${item.id}')">OPEN</button>
+                    <button class="btn-action" style="background:#fff" onclick="BoltPro.downloadFile('${item.id}')">GET</button>
+                    <button class="btn-del-mini" onclick="BoltPro.deleteItem('${item.id}')">✕</button>
+                </div>
+            </div>`;
+        document.getElementById('transfer-queue').insertAdjacentHTML('afterbegin', html);
+    };
+
+    const openPreview = async (id) => {
+        let item = cache.get(id);
+        if(!item) return;
+
+        // If it's a remote file we don't have the data for yet, request it
+        if(!item.data && conn) {
+            conn.send({ type: 'FILE_REQUEST', id: id });
+            alert("Fetching asset from linked device...");
+            return;
+        }
+
+        const body = document.getElementById('preview-body');
+        body.innerHTML = '';
+
+        if (item.isHTML) {
+            const iframe = document.createElement('iframe');
+            iframe.src = item.data;
+            body.appendChild(iframe);
+        } else if (item.type.startsWith('image/')) {
+            body.innerHTML = `<img src="${item.data}">`;
+        } else if (item.type.startsWith('video/')) {
+            body.innerHTML = `<video id="v-player" controls autoplay playsinline src="${item.data}"></video>`;
+        } else if (item.isText) {
+            const text = await item.raw.text();
+            body.innerHTML = `<div class="text-preview">${text.replace(/</g, "&lt;")}</div>`;
+        } else {
+            body.innerHTML = `<iframe src="${item.data}"></iframe>`;
+        }
+        document.getElementById('preview-modal').style.display = 'flex';
+    };
+
+    const closePreview = () => {
+        const v = document.getElementById('v-player');
+        if(v) { v.pause(); v.src = ""; v.load(); }
+        document.getElementById('preview-body').innerHTML = '';
+        document.getElementById('preview-modal').style.display = 'none';
+    };
+
+    const downloadFile = (id) => {
+        const item = cache.get(id);
+        if(!item.data) return alert("Download asset on original device or wait for sync.");
+        const a = document.createElement('a');
+        a.href = item.data; a.download = item.name; a.click();
+    };
+
+    const deleteItem = (id) => {
+        const item = cache.get(id);
+        if(item && item.data) URL.revokeObjectURL(item.data);
+        cache.delete(id);
+        document.getElementById('strip-' + id)?.remove();
+        closePreview();
+    };
+
+    const toggleScanner = async (on) => {
+        const sv = document.getElementById('scanner-view');
+        const dv = document.getElementById('qr-display');
+        if(on) {
+            dv.classList.remove('active'); sv.classList.add('active');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+                document.getElementById('scanner-video').srcObject = stream;
+            } catch(e) { alert("Camera access denied."); }
+        } else {
+            if(stream) stream.getTracks().forEach(t=>t.stop());
+            sv.classList.remove('active'); dv.classList.add('active');
+        }
+    };
+
+    init();
+    return { 
+        stageFiles, openPreview, closePreview, deleteItem, downloadFile, toggleScanner, 
+        copyID: () => { navigator.clipboard.writeText(document.getElementById('my-id').innerText); alert("ID Copied"); },
+        connectToPeer: () => {
+            const id = document.getElementById('peer-id-input').value;
+            if(!id) return;
+            conn = peer.connect(id);
+            setupConnHandlers();
+        }
+    };
+})();
+</script>
