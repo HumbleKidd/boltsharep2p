@@ -11,7 +11,7 @@
                 <span>BoltShare PRO</span>
             </div>
             <div class="system-status">
-                <span class="pulse-dot"></span> <span id="node-status">P2P Node Active</span>
+                <span class="pulse-dot"></span> <span id="node-status">Secure Storage Active</span>
             </div>
         </div>
     </nav>
@@ -27,7 +27,7 @@
                 <div class="qr-container">
                     <div id="qr-display" class="qr-view active">
                          <div id="real-qr-target"></div>
-                         <p class="qr-label">SCAN TO CONNECT</p>
+                         <p class="qr-label">SCAN TO SYNC APP & FILES</p>
                     </div>
                     <div id="scanner-view" class="qr-view">
                         <div id="interactive-reader" style="width: 100%;"></div>
@@ -62,7 +62,7 @@
             </div>
         </div>
 
-        <div class="active-queue-header">Live Assets Feed</div>
+        <div class="active-queue-header">Persistent Asset Feed</div>
         <div id="transfer-queue" class="queue-list"></div>
     </main>
 
@@ -78,7 +78,7 @@
 </div>
 
 <style>
-/* RESTORING ORIGINAL DESIGN INTEGRITY */
+/* Design integrity preserved exactly as locked */
 #bolt-share-armor-pro { --primary: #00f2ff; --bg-deep: #05070a; --glass: rgba(255, 255, 255, 0.05); --border: rgba(255, 255, 255, 0.1); --text: #e2e8f0; background: var(--bg-deep); color: var(--text); min-height: 100vh; font-family: sans-serif; }
 .armor-nav { background: rgba(10, 15, 25, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
 .nav-container { max-width: 1100px; margin: 0 auto; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
@@ -108,7 +108,6 @@
 .btn-sec { background: transparent; border: 1px solid var(--border); color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer; }
 .badge { background: var(--primary); color: #000; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 900; }
 
-/* MOBILE FIXES WITHOUT BREAKING PC */
 @media (max-width: 768px) {
     .dual-layout { grid-template-columns: 1fr; gap: 1rem; }
     .armor-viewport { padding: 1rem; }
@@ -119,13 +118,22 @@
 
 <script>
 const BoltPro = (() => {
-    let peer = null;
-    let conn = null;
-    let html5QrCode = null;
+    let peer = null, conn = null, html5QrCode = null, db = null;
     const cache = new Map();
 
-    const init = () => {
+    const init = async () => {
+        await setupDB();
         setupPeer();
+        loadHistory();
+        setInterval(autoPurge, 60000); // Check every minute
+    };
+
+    const setupDB = () => {
+        return new Promise((resolve) => {
+            const req = indexedDB.open("BoltPersistence_Final", 1);
+            req.onupgradeneeded = (e) => e.target.result.createObjectStore("files", { keyPath: "id" });
+            req.onsuccess = (e) => { db = e.target.result; resolve(); };
+        });
     };
 
     const setupPeer = () => {
@@ -134,30 +142,27 @@ const BoltPro = (() => {
         
         peer.on('open', id => {
             document.getElementById('my-id').innerText = id;
+            // Generate link including current page URL + ID
+            const shareUrl = window.location.href.split('?')[0] + '?peer=' + id;
             document.getElementById('real-qr-target').innerHTML = "";
-            new QRCode(document.getElementById('real-qr-target'), { text: id, width: 150, height: 150 });
+            new QRCode(document.getElementById('real-qr-target'), { text: shareUrl, width: 150, height: 150 });
+            
+            // Auto-connect if URL has peer param
+            const urlParams = new URLSearchParams(window.location.search);
+            if(urlParams.get('peer')) connectToPeer(urlParams.get('peer'));
         });
 
-        peer.on('connection', c => {
-            conn = c;
-            setupConnHandlers();
-        });
+        peer.on('connection', c => { conn = c; setupConnHandlers(); });
     };
 
     const setupConnHandlers = () => {
         document.getElementById('conn-status').innerText = "LINKED";
         document.getElementById('conn-status').style.background = "#22c55e";
-
-        // Send existing files to the new peer
-        const list = Array.from(cache.values()).map(f => ({
-            id: f.id, name: f.name, type: f.type, isHTML: f.isHTML, isText: f.isText
-        }));
+        const list = Array.from(cache.values()).map(f => ({ id: f.id, name: f.name, type: f.type, isHTML: f.isHTML, isText: f.isText }));
         conn.send({ type: 'SYNC', files: list });
 
         conn.on('data', data => {
-            if (data.type === 'SYNC') {
-                data.files.forEach(f => renderItem(f, true));
-            }
+            if (data.type === 'SYNC') data.files.forEach(f => renderItem(f, true));
             if (data.type === 'REQ_DATA') {
                 const item = cache.get(data.id);
                 conn.send({ type: 'SEND_DATA', id: item.id, raw: item.raw, name: item.name, itemType: item.type });
@@ -165,8 +170,55 @@ const BoltPro = (() => {
             if (data.type === 'SEND_DATA') {
                 const blob = new Blob([data.raw], { type: data.itemType });
                 const url = URL.createObjectURL(blob);
-                cache.set(data.id, { ...data, data: url, raw: blob });
-                openPreview(data.id);
+                const item = { ...data, data: url, raw: blob, time: Date.now() };
+                cache.set(data.id, item);
+                saveToDB(item);
+                renderItem(item, true);
+            }
+        });
+    };
+
+    const loadHistory = () => {
+        const tx = db.transaction("files", "readonly");
+        tx.objectStore("files").openCursor().onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const item = cursor.value;
+                item.data = URL.createObjectURL(item.raw);
+                cache.set(item.id, item);
+                renderItem(item);
+                cursor.continue();
+            }
+        };
+    };
+
+    const saveToDB = (item) => {
+        const tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").put({ ...item, data: null });
+    };
+
+    const stageFiles = async (files) => {
+        for (const file of Array.from(files)) {
+            const id = 'f' + Date.now() + Math.random().toString(36).substr(2,3);
+            const isHTML = file.name.endsWith('.html');
+            const isText = file.type.startsWith('text/') && !isHTML;
+            const item = { id, name: file.name, type: file.type, data: URL.createObjectURL(file), raw: file, isHTML, isText, time: Date.now() };
+            cache.set(id, item);
+            saveToDB(item);
+            renderItem(item);
+            if(conn && conn.open) conn.send({ type: 'SYNC', files: [item] });
+        }
+    };
+
+    const autoPurge = () => {
+        const now = Date.now();
+        const tx = db.transaction("files", "readwrite");
+        const store = tx.objectStore("files");
+        cache.forEach((item, id) => {
+            if (now - item.time > 600000) {
+                store.delete(id);
+                cache.delete(id);
+                document.getElementById('strip-' + id)?.remove();
             }
         });
     };
@@ -179,42 +231,25 @@ const BoltPro = (() => {
     };
 
     const toggleScanner = async (on) => {
-        const sv = document.getElementById('scanner-view');
-        const dv = document.getElementById('qr-display');
+        const sv = document.getElementById('scanner-view'), dv = document.getElementById('qr-display');
         if(on) {
             dv.classList.remove('active'); sv.classList.add('active');
             html5QrCode = new Html5Qrcode("interactive-reader");
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
-                connectToPeer(text);
+                if(text.includes('?peer=')) {
+                    const id = text.split('?peer=')[1];
+                    connectToPeer(id);
+                } else { connectToPeer(text); }
                 toggleScanner(false);
             });
-        } else {
-            if(html5QrCode) await html5QrCode.stop();
-            sv.classList.remove('active'); dv.classList.add('active');
-        }
-    };
-
-    const stageFiles = async (files) => {
-        for (const file of Array.from(files)) {
-            const id = 'f' + Date.now() + Math.random().toString(36).substr(2,3);
-            const isHTML = file.name.endsWith('.html');
-            const isText = file.type.startsWith('text/') && !isHTML;
-            const url = URL.createObjectURL(file);
-            const item = { id, name: file.name, type: file.type, data: url, raw: file, isHTML, isText };
-            cache.set(id, item);
-            renderItem(item);
-            if(conn && conn.open) conn.send({ type: 'SYNC', files: [item] });
-        }
+        } else { if(html5QrCode) await html5QrCode.stop(); sv.classList.remove('active'); dv.classList.add('active'); }
     };
 
     const renderItem = (item, isRemote = false) => {
         if (document.getElementById(`strip-${item.id}`)) return;
         const html = `
             <div class="transfer-strip" id="strip-${item.id}">
-                <div>
-                    <div style="font-weight:700; color:var(--primary)">${item.name}</div>
-                    <div style="font-size:10px; opacity:0.5">${isRemote ? 'Remote Asset' : 'Local'}</div>
-                </div>
+                <div><div style="font-weight:700; color:var(--primary)">${item.name}</div><div style="font-size:10px; opacity:0.5">${isRemote ? 'Remote' : 'Stored'}</div></div>
                 <div class="instant-actions">
                     <button class="btn-action" onclick="BoltPro.openPreview('${item.id}')">OPEN</button>
                     <button class="btn-action" style="background:#fff" onclick="BoltPro.downloadFile('${item.id}')">GET</button>
@@ -227,21 +262,17 @@ const BoltPro = (() => {
         const item = cache.get(id);
         if(!item) return;
         if(!item.data && conn) { conn.send({ type: 'REQ_DATA', id }); return; }
-
         const body = document.getElementById('preview-body');
         body.innerHTML = '';
         if (item.isHTML) body.innerHTML = `<iframe src="${item.data}" style="background:#fff"></iframe>`;
         else if (item.type.startsWith('image/')) body.innerHTML = `<img src="${item.data}">`;
         else if (item.type.startsWith('video/')) body.innerHTML = `<video controls autoplay src="${item.data}"></video>`;
         else body.innerHTML = `<iframe src="${item.data}"></iframe>`;
-
-        document.getElementById('modal-dl-btn').onclick = () => BoltPro.downloadFile(id);
         document.getElementById('preview-modal').style.display = 'flex';
     };
 
     init();
-    return { 
-        stageFiles, openPreview, toggleScanner, connectToPeer,
+    return { stageFiles, openPreview, toggleScanner, connectToPeer,
         closePreview: () => { document.getElementById('preview-modal').style.display = 'none'; document.getElementById('preview-body').innerHTML = ''; },
         copyID: () => { navigator.clipboard.writeText(document.getElementById('my-id').innerText); alert("ID Copied"); },
         downloadFile: (id) => { const item = cache.get(id); const a = document.createElement('a'); a.href = item.data; a.download = item.name; a.click(); }
