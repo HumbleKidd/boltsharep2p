@@ -40,10 +40,10 @@
                 </div>
 
                 <div class="input-stack">
-                    <input type="text" id="peer-id-input" placeholder="Paste Peer ID...">
+                    <input type="text" id="peer-id-input" placeholder="Paste Peer ID..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px; border-radius: 6px;">
                     <button class="btn-glow" onclick="BoltPro.connectToPeer()">Link</button>
                 </div>
-                <p class="meta-text">My ID: <strong id="my-id">...</strong> <button class="btn-mini" onclick="BoltPro.copyID()">Copy</button></p>
+                <p class="meta-text" style="margin-top:10px; font-size: 12px;">My ID: <strong id="my-id" style="color:var(--primary)">...</strong> <button class="btn-mini" onclick="BoltPro.copyID()">Copy</button></p>
             </div>
 
             <div class="card glass">
@@ -62,7 +62,7 @@
             </div>
         </div>
 
-        <div class="active-queue-header">Live Assets Feed</div>
+        <div class="active-queue-header" style="font-weight: 800; color: var(--primary); margin-bottom: 15px;">Live Assets Feed</div>
         <div id="transfer-queue" class="queue-list"></div>
     </main>
 
@@ -88,13 +88,14 @@
 .dual-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2.5rem; }
 .card.glass { background: var(--glass); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; }
 .qr-container { height: 210px; background: #fff; border-radius: 12px; margin: 1rem 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-#real-qr-target img { width: 150px !important; height: 150px !important; }
+#real-qr-target img { width: 150px !important; height: 150px !important; margin: 0 auto; }
 .qr-view { display: none; width: 100%; height: 100%; align-items: center; justify-content: center; flex-direction: column; }
 .qr-view.active { display: flex; }
 .qr-label { color: #000; font-size: 10px; font-weight: 900; margin-top: 8px; }
 .drop-target { height: 240px; border: 2px dashed var(--border); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
 .icon-circle { width: 64px; height: 64px; background: rgba(0, 242, 255, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary); }
-.transfer-strip { background: var(--glass); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border: 1px solid var(--border); }
+.transfer-strip { background: var(--glass); padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border: 1px solid var(--border); animation: slideIn 0.3s ease-out; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 .instant-actions { display: flex; gap: 10px; }
 .btn-action, .btn-mini { background: var(--primary); color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
 .btn-mini { background: var(--glass); color: #fff; border: 1px solid var(--border); }
@@ -123,7 +124,7 @@ const BoltPro = (() => {
         await setupDB();
         setupPeer();
         loadHistory();
-        setInterval(autoPurge, 30000); 
+        setInterval(autoPurge, 60000); 
     };
 
     const setupDB = () => {
@@ -140,18 +141,29 @@ const BoltPro = (() => {
         
         peer.on('open', id => {
             document.getElementById('my-id').innerText = id;
-            const shareUrl = window.location.href.split('?')[0] + '?peer=' + id;
+            // FIX: Ensure QR code includes the peer parameter correctly
+            const cleanUrl = window.location.href.split('?')[0];
+            const shareUrl = cleanUrl + '?peer=' + id;
+            
             document.getElementById('real-qr-target').innerHTML = "";
             new QRCode(document.getElementById('real-qr-target'), { text: shareUrl, width: 150, height: 150 });
             
+            // Auto-join if URL has peer parameter
             const urlParams = new URLSearchParams(window.location.search);
-            if(urlParams.get('peer')) connectToPeer(urlParams.get('peer'));
+            if(urlParams.get('peer')) {
+                setTimeout(() => connectToPeer(urlParams.get('peer')), 1000);
+            }
         });
 
-        // Listen for incoming connections (Device A)
         peer.on('connection', c => {
             conn = c;
             setupConnHandlers();
+        });
+
+        peer.on('error', err => {
+            console.error('Peer Error:', err);
+            document.getElementById('conn-status').innerText = "ERROR";
+            document.getElementById('conn-status').style.background = "#ef4444";
         });
     };
 
@@ -159,9 +171,10 @@ const BoltPro = (() => {
         document.getElementById('conn-status').innerText = "LINKED";
         document.getElementById('conn-status').style.background = "#22c55e";
 
-        // When a connection is established, Device A (source) sends its list
-        // And Device B (receiver) sends its list. This ensures bidirectional sync.
-        syncLocalList();
+        // Handshake: Request file list from peer immediately upon connection
+        conn.on('open', () => {
+            syncLocalList();
+        });
 
         conn.on('data', data => {
             if (data.type === 'SYNC_LIST') {
@@ -175,17 +188,38 @@ const BoltPro = (() => {
             if (data.type === 'REQ_DATA') {
                 const item = cache.get(data.id);
                 if (item && item.raw) {
-                    conn.send({ type: 'SEND_DATA', id: item.id, raw: item.raw, name: item.name, itemType: item.type });
+                    conn.send({ 
+                        type: 'SEND_DATA', 
+                        id: item.id, 
+                        raw: item.raw, 
+                        name: item.name, 
+                        itemType: item.type 
+                    });
                 }
             }
             if (data.type === 'SEND_DATA') {
-                const blob = new Blob([data.raw], { type: data.itemType });
+                const blob = data.raw instanceof Blob ? data.raw : new Blob([data.raw], { type: data.itemType });
                 const url = URL.createObjectURL(blob);
-                const item = { ...data, data: url, raw: blob, time: Date.now() };
+                const item = { 
+                    id: data.id, 
+                    name: data.name, 
+                    type: data.itemType, 
+                    data: url, 
+                    raw: blob, 
+                    time: Date.now(),
+                    isHTML: data.name.endsWith('.html'),
+                    isText: data.itemType.startsWith('text/')
+                };
                 cache.set(data.id, item);
                 saveToDB(item);
+                renderItem(item, true);
                 openPreview(data.id);
             }
+        });
+
+        conn.on('close', () => {
+            document.getElementById('conn-status').innerText = "DISCONNECTED";
+            document.getElementById('conn-status').style.background = "#64748b";
         });
     };
 
@@ -198,12 +232,13 @@ const BoltPro = (() => {
     };
 
     const loadHistory = () => {
+        if (!db) return;
         const tx = db.transaction("files", "readonly");
         tx.objectStore("files").openCursor().onsuccess = (e) => {
             const cursor = e.target.result;
             if (cursor) {
                 const item = cursor.value;
-                item.data = URL.createObjectURL(item.raw);
+                if(item.raw) item.data = URL.createObjectURL(item.raw);
                 cache.set(item.id, item);
                 renderItem(item);
                 cursor.continue();
@@ -212,6 +247,7 @@ const BoltPro = (() => {
     };
 
     const saveToDB = (item) => {
+        if (!db) return;
         const tx = db.transaction("files", "readwrite");
         tx.objectStore("files").put({ ...item, data: null });
     };
@@ -225,7 +261,7 @@ const BoltPro = (() => {
             cache.set(id, item);
             saveToDB(item);
             renderItem(item);
-            syncLocalList(); // Immediate broadcast of new file
+            if (conn && conn.open) syncLocalList();
         }
     };
 
@@ -234,7 +270,7 @@ const BoltPro = (() => {
         const tx = db.transaction("files", "readwrite");
         const store = tx.objectStore("files");
         cache.forEach((item, id) => {
-            if (now - item.time > 600000) { // 10 Min
+            if (now - item.time > 3600000) { // Extended to 1 Hour for better UX
                 store.delete(id);
                 cache.delete(id);
                 document.getElementById('strip-' + id)?.remove();
@@ -244,12 +280,10 @@ const BoltPro = (() => {
 
     const connectToPeer = (id) => {
         const target = id || document.getElementById('peer-id-input').value;
-        if(!target) return;
+        if(!target || target === peer.id) return;
         if (conn) conn.close();
         conn = peer.connect(target);
-        conn.on('open', () => {
-            setupConnHandlers();
-        });
+        setupConnHandlers();
     };
 
     const toggleScanner = async (on) => {
@@ -258,18 +292,28 @@ const BoltPro = (() => {
             dv.classList.remove('active'); sv.classList.add('active');
             html5QrCode = new Html5Qrcode("interactive-reader");
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
-                const id = text.includes('?peer=') ? text.split('?peer=')[1] : text;
+                const id = text.includes('peer=') ? text.split('peer=')[1] : text;
                 connectToPeer(id);
                 toggleScanner(false);
             });
-        } else { if(html5QrCode) await html5QrCode.stop(); sv.classList.remove('active'); dv.classList.add('active'); }
+        } else { 
+            if(html5QrCode) {
+                await html5QrCode.stop();
+                html5QrCode = null;
+            }
+            sv.classList.remove('active'); 
+            dv.classList.add('active'); 
+        }
     };
 
     const renderItem = (item, isRemote = false) => {
         if (document.getElementById(`strip-${item.id}`)) return;
         const html = `
             <div class="transfer-strip" id="strip-${item.id}">
-                <div><div style="font-weight:700; color:var(--primary)">${item.name}</div><div style="font-size:10px; opacity:0.5">${isRemote ? 'Cloud Bridge' : 'Local Archive'}</div></div>
+                <div>
+                    <div style="font-weight:700; color:var(--primary)">${item.name}</div>
+                    <div style="font-size:10px; opacity:0.5">${isRemote ? 'Peer Stream' : 'Local Node'}</div>
+                </div>
                 <div class="instant-actions">
                     <button class="btn-action" onclick="BoltPro.openPreview('${item.id}')">OPEN</button>
                     <button class="btn-action" style="background:#fff" onclick="BoltPro.downloadFile('${item.id}')">GET</button>
@@ -281,7 +325,11 @@ const BoltPro = (() => {
     const openPreview = (id) => {
         const item = cache.get(id);
         if(!item) return;
-        if(!item.data && conn) { conn.send({ type: 'REQ_DATA', id }); return; }
+        if(!item.data && conn) { 
+            conn.send({ type: 'REQ_DATA', id }); 
+            alert("Requesting file from peer...");
+            return; 
+        }
         const body = document.getElementById('preview-body');
         body.innerHTML = '';
         if (item.isHTML) body.innerHTML = `<iframe src="${item.data}" style="background:#fff"></iframe>`;
@@ -292,13 +340,32 @@ const BoltPro = (() => {
     };
 
     init();
-    return { stageFiles, openPreview, toggleScanner, connectToPeer,
-        closePreview: () => { document.getElementById('preview-modal').style.display = 'none'; document.getElementById('preview-body').innerHTML = ''; },
-        copyID: () => { navigator.clipboard.writeText(document.getElementById('my-id').innerText); alert("ID Copied"); },
+    return { 
+        stageFiles, 
+        openPreview, 
+        toggleScanner, 
+        connectToPeer,
+        closePreview: () => { 
+            document.getElementById('preview-modal').style.display = 'none'; 
+            document.getElementById('preview-body').innerHTML = ''; 
+        },
+        copyID: () => { 
+            navigator.clipboard.writeText(document.getElementById('my-id').innerText); 
+            alert("ID Copied to clipboard"); 
+        },
         downloadFile: (id) => { 
             const item = cache.get(id); 
-            if(!item.data && conn) { conn.send({ type: 'REQ_DATA', id }); return; }
-            const a = document.createElement('a'); a.href = item.data; a.download = item.name; a.click(); 
+            if(!item.data && conn) { 
+                conn.send({ type: 'REQ_DATA', id }); 
+                alert("Requesting file from peer...");
+                return; 
+            }
+            const a = document.createElement('a'); 
+            a.href = item.data; 
+            a.download = item.name; 
+            document.body.appendChild(a);
+            a.click(); 
+            document.body.removeChild(a);
         }
     };
 })();
