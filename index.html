@@ -62,8 +62,12 @@
             </div>
         </div>
 
-        <div class="feed-header">Live Assets Feed</div>
-        <div id="transfer-queue" class="stream-container"></div>
+        <div class="feed-controls">
+            <div class="feed-header">Live Assets Feed</div>
+            <button class="btn-clear-all" onclick="BoltPro.clearAll()">WIPE ALL</button>
+        </div>
+        <div id="transfer-queue" class="stream-container">
+            </div>
     </main>
 
     <div id="preview-modal" class="modal" onclick="BoltPro.closePreview()">
@@ -78,92 +82,90 @@
 </div>
 
 <style>
-/* Essential Reset to prevent horizontal scroll */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { overflow-x: hidden; width: 100%; margin: 0; padding: 0; }
+html, body { overflow-x: hidden; width: 100%; margin: 0; padding: 0; background: #05070a; }
 
 #bolt-share-armor-pro { 
     --primary: #00f2ff; --bg-deep: #05070a; --glass: rgba(255, 255, 255, 0.04); 
     --border: rgba(255, 255, 255, 0.08); --text: #e2e8f0; 
-    background: var(--bg-deep); color: var(--text); min-height: 100vh; 
-    font-family: -apple-system, system-ui, sans-serif; width: 100%; overflow-x: hidden;
+    color: var(--text); min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; width: 100%;
 }
 
-.armor-nav { background: rgba(5, 7, 10, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); width: 100%; }
+.armor-nav { background: rgba(5, 7, 10, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .nav-container { max-width: 800px; margin: 0 auto; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--primary); font-size: 1rem; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--primary); }
 .icon-bolt { width: 18px; fill: var(--primary); }
-.pulse-dot { width: 7px; height: 7px; background: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e; }
 
 .armor-viewport { max-width: 800px; margin: 0 auto; padding: 1rem; width: 100%; }
-
-.fluid-stack { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; width: 100%; }
+.fluid-stack { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
 @media (min-width: 600px) { .fluid-stack { flex-direction: row; } .utility-box { flex: 1; } }
 
-.utility-box.glass { background: var(--glass); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; width: 100%; }
+.utility-box.glass { background: var(--glass); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
 .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 
-.qr-payload-zone { background: #fff; border-radius: 10px; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 150px; margin-bottom: 1rem; width: 100%; }
-#real-qr-target img { width: 130px !important; height: 130px !important; display: block; }
+.qr-payload-zone { background: #fff; border-radius: 10px; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 150px; margin-bottom: 1rem; }
+#real-qr-target img { width: 130px !important; height: 130px !important; }
 
 .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.manual-input-row { display: flex; gap: 6px; width: 100%; }
+.manual-input-row { display: flex; gap: 6px; }
 .manual-input-row input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 10px; color: #fff; font-size: 14px; min-width: 0; }
 .id-tag { font-size: 10px; margin-top: 8px; opacity: 0.5; }
 
-.drop-zone-free { border: 2px dashed var(--border); border-radius: 12px; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; width: 100%; }
+.drop-zone-free { border: 2px dashed var(--border); border-radius: 12px; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
 .icon-circle { width: 44px; height: 44px; background: rgba(0, 242, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary); }
 .upload-hint { margin-top: 8px; font-weight: 800; color: var(--primary); font-size: 11px; }
 
-.feed-header { font-weight: 800; color: var(--primary); font-size: 0.75rem; text-transform: uppercase; margin: 1.5rem 0 10px 0; }
-.stream-container { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.feed-controls { display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 10px 0; }
+.feed-header { font-weight: 800; color: var(--primary); font-size: 0.75rem; text-transform: uppercase; }
+.btn-clear-all { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 4px 10px; border-radius: 4px; font-size: 9px; font-weight: 800; cursor: pointer; }
 
-/* Asset Strip - Optimized for no-bleed */
-.asset-strip { 
-    background: var(--glass); border: 1px solid var(--border); border-radius: 10px; 
-    padding: 10px 12px; display: flex; align-items: center; gap: 10px; width: 100%;
-}
-.asset-meta-group { flex: 1; min-width: 0; overflow: hidden; }
-.asset-name { font-weight: 700; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-.asset-origin { font-size: 9px; opacity: 0.4; margin-top: 2px; }
+.stream-container { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.asset-strip { background: var(--glass); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.asset-meta-group { flex: 1; min-width: 0; }
+.asset-name { font-weight: 700; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asset-timer { font-size: 9px; color: #fbbf24; margin-top: 2px; font-variant-numeric: tabular-nums; }
 
 .action-cluster { display: flex; gap: 5px; flex-shrink: 0; }
 .btn-core { border: none; padding: 8px 12px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer; }
 .btn-view { background: var(--primary); color: #000; }
-.btn-get { background: #fff; color: #000; }
+.btn-del { background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--border); }
 
-/* Mobile View Adjustments - Prevent overlap */
 @media (max-width: 480px) {
-    .asset-strip { flex-direction: column; align-items: stretch; gap: 8px; }
-    .action-cluster { width: 100%; }
+    .asset-strip { flex-direction: column; align-items: stretch; }
+    .action-cluster { width: 100%; margin-top: 8px; }
     .btn-core { flex: 1; text-align: center; }
-    .asset-name { white-space: normal; word-break: break-all; font-size: 12px; }
 }
 
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.97); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 10px; width: 100%; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.97); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 10px; }
 .modal-content { background: #080808; border-radius: 16px; width: 100%; max-width: 600px; border: 1px solid var(--border); overflow: hidden; }
-.media-container { width: 100%; height: 50vh; display: flex; align-items: center; justify-content: center; background: #000; padding: 5px; }
-.media-container * { max-width: 100%; max-height: 100%; object-fit: contain; }
+.media-container { width: 100%; height: 50vh; display: flex; align-items: center; justify-content: center; background: #000; }
 .modal-footer { padding: 12px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid var(--border); }
-.btn-glow { background: var(--primary); color: #000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 800; font-size: 13px; }
-.btn-sec { background: transparent; border: 1px solid var(--border); color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; }
+.btn-glow { background: var(--primary); color: #000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 800; }
+.btn-sec { background: transparent; border: 1px solid var(--border); color: #fff; padding: 10px 20px; border-radius: 6px; font-weight: 700; }
 .badge { background: var(--primary); color: #000; padding: 1px 6px; border-radius: 3px; font-size: 8px; font-weight: 900; }
 </style>
 
 <script>
 const BoltPro = (() => {
-    let peer = null, conn = null, html5QrCode = null, db = null;
+    let peer = null, conn = null, db = null;
     const cache = new Map();
+    const EXPIRY_TIME = 5 * 60 * 1000; // 5 Minutes
 
     const init = async () => {
         await setupDB();
         setupPeer();
-        loadHistory();
+        // Clear history on start to ensure no example/old files
+        const tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").clear();
+        
+        setInterval(refreshTimers, 1000); // Update expiry countdown
     };
 
     const setupDB = () => {
         return new Promise((resolve) => {
-            const req = indexedDB.open("BoltPersistence_Final", 1);
+            const req = indexedDB.open("Bolt_Volatile_Storage", 1);
             req.onupgradeneeded = (e) => e.target.result.createObjectStore("files", { keyPath: "id" });
             req.onsuccess = (e) => { db = e.target.result; resolve(); };
         });
@@ -171,14 +173,12 @@ const BoltPro = (() => {
 
     const setupPeer = () => {
         const peerId = 'BOLT-' + Math.floor(Math.random() * 90000 + 10000);
-        peer = new Peer(peerId, { debug: 1 });
+        peer = new Peer(peerId);
         
         peer.on('open', id => {
             document.getElementById('my-id').innerText = id;
             const shareUrl = window.location.origin + window.location.pathname + '?peer=' + id;
-            const qrTarget = document.getElementById('real-qr-target');
-            qrTarget.innerHTML = "";
-            new QRCode(qrTarget, { text: shareUrl, width: 130, height: 130 });
+            new QRCode(document.getElementById('real-qr-target'), { text: shareUrl, width: 130, height: 130 });
             
             const urlParams = new URLSearchParams(window.location.search);
             if(urlParams.get('peer')) connectToPeer(urlParams.get('peer'));
@@ -186,53 +186,64 @@ const BoltPro = (() => {
 
         peer.on('connection', c => {
             conn = c;
-            setupConnHandlers();
+            handleConnection();
         });
     };
 
-    const setupConnHandlers = () => {
+    const handleConnection = () => {
         document.getElementById('conn-status').innerText = "LINKED";
         document.getElementById('conn-status').style.background = "#22c55e";
-        
-        // Auto-push files to the new peer
-        cache.forEach(f => {
-            if(f.raw) conn.send({ type: 'SEND_DATA', id: f.id, raw: f.raw, name: f.name, itemType: f.type });
-        });
+
+        // SYNC HANDSHAKE:
+        // 1. Tell the other person we are ready
+        conn.send({ type: 'HANDSHAKE' });
 
         conn.on('data', data => {
-            if (data.type === 'SEND_DATA') {
-                const blob = new Blob([data.raw], { type: data.itemType });
-                const url = URL.createObjectURL(blob);
-                const item = { 
-                    id: data.id, name: data.name, type: data.itemType, 
-                    data: url, raw: blob, time: Date.now(),
-                    isHTML: data.name.endsWith('.html'),
-                    isText: data.itemType.startsWith('text/')
-                };
-                cache.set(data.id, item);
-                saveToDB(item);
-                renderItem(item, true);
+            // When we receive a handshake, push all our current files back
+            if (data.type === 'HANDSHAKE') pushCurrentCache();
+            
+            if (data.type === 'FILE_PUSH') {
+                processIncoming(data);
             }
+            if (data.type === 'DELETE_SIGNAL') {
+                removeLocal(data.id);
+            }
+            if (data.type === 'CLEAR_SIGNAL') {
+                wipeLocal();
+            }
+        });
+    };
+
+    const pushCurrentCache = () => {
+        if (!conn || !conn.open) return;
+        cache.forEach(item => {
+            conn.send({ type: 'FILE_PUSH', ...item });
         });
     };
 
     const stageFiles = async (files) => {
         for (const file of Array.from(files)) {
-            const id = 'f' + Date.now() + Math.random().toString(36).substr(2,3);
+            const id = 'f' + Date.now();
             const item = { 
                 id, name: file.name, type: file.type, 
                 data: URL.createObjectURL(file), raw: file, 
-                isHTML: file.name.endsWith('.html'), 
-                isText: file.type.startsWith('text/'), time: Date.now() 
+                expiry: Date.now() + EXPIRY_TIME 
             };
             cache.set(id, item);
-            saveToDB(item);
             renderItem(item);
-            if (conn && conn.open) conn.send({ type: 'SEND_DATA', id, raw: file, name: file.name, itemType: file.type });
+            if (conn && conn.open) conn.send({ type: 'FILE_PUSH', ...item });
         }
     };
 
-    const renderItem = (item, isRemote = false) => {
+    const processIncoming = (item) => {
+        if (cache.has(item.id)) return;
+        const blob = new Blob([item.raw], { type: item.type });
+        item.data = URL.createObjectURL(blob);
+        cache.set(item.id, item);
+        renderItem(item);
+    };
+
+    const renderItem = (item) => {
         if (document.getElementById(`strip-${item.id}`)) return;
         const list = document.getElementById('transfer-queue');
         const div = document.createElement('div');
@@ -241,81 +252,89 @@ const BoltPro = (() => {
         div.innerHTML = `
             <div class="asset-meta-group">
                 <div class="asset-name">${item.name}</div>
-                <div class="asset-origin">${isRemote ? 'Peer Asset' : 'Local Archive'}</div>
+                <div class="asset-timer" id="timer-${item.id}">Expiring in 5:00</div>
             </div>
             <div class="action-cluster">
                 <button class="btn-core btn-view" onclick="BoltPro.openPreview('${item.id}')">VIEW</button>
-                <button class="btn-core btn-get" onclick="BoltPro.downloadFile('${item.id}')">GET</button>
+                <button class="btn-core btn-del" onclick="BoltPro.deleteItem('${item.id}')">DELETE</button>
             </div>
         `;
         list.prepend(div);
     };
 
-    const loadHistory = () => {
-        if (!db) return;
-        const tx = db.transaction("files", "readonly");
-        tx.objectStore("files").openCursor().onsuccess = (e) => {
-            const cursor = e.target.result;
-            if (cursor) {
-                const item = cursor.value;
-                item.data = URL.createObjectURL(item.raw);
-                cache.set(item.id, item);
-                renderItem(item);
-                cursor.continue();
+    const refreshTimers = () => {
+        const now = Date.now();
+        cache.forEach((item, id) => {
+            const remaining = item.expiry - now;
+            if (remaining <= 0) {
+                removeLocal(id);
+            } else {
+                const mins = Math.floor(remaining / 60000);
+                const secs = Math.floor((remaining % 60000) / 1000);
+                const el = document.getElementById(`timer-${id}`);
+                if (el) el.innerText = `Expiring in ${mins}:${secs.toString().padStart(2, '0')}`;
             }
-        };
+        });
     };
 
-    const saveToDB = (item) => {
-        if (!db) return;
-        const tx = db.transaction("files", "readwrite");
-        tx.objectStore("files").put({ ...item, data: null });
+    const removeLocal = (id) => {
+        cache.delete(id);
+        document.getElementById(`strip-${id}`)?.remove();
+    };
+
+    const wipeLocal = () => {
+        cache.clear();
+        document.getElementById('transfer-queue').innerHTML = '';
     };
 
     const connectToPeer = (id) => {
         const target = id || document.getElementById('peer-id-input').value;
         if(!target || target === peer.id) return;
-        if (conn) conn.close();
         conn = peer.connect(target);
-        setupConnHandlers();
-    };
-
-    const openPreview = (id) => {
-        const item = cache.get(id);
-        if(!item) return;
-        const body = document.getElementById('preview-body');
-        body.innerHTML = '';
-        if (item.isHTML) body.innerHTML = `<iframe src="${item.data}" style="background:#fff; width:100%; height:100%;"></iframe>`;
-        else if (item.type.startsWith('image/')) body.innerHTML = `<img src="${item.data}">`;
-        else if (item.type.startsWith('video/')) body.innerHTML = `<video controls autoplay src="${item.data}"></video>`;
-        else body.innerHTML = `<iframe src="${item.data}" style="width:100%; height:100%;"></iframe>`;
-        
-        document.getElementById('modal-dl-btn').onclick = () => BoltPro.downloadFile(id);
-        document.getElementById('preview-modal').style.display = 'flex';
-    };
-
-    const toggleScanner = async (on) => {
-        const sv = document.getElementById('scanner-view'), dv = document.getElementById('qr-display');
-        if(on) {
-            dv.classList.remove('active'); sv.classList.add('active');
-            html5QrCode = new Html5Qrcode("interactive-reader");
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
-                const id = text.includes('peer=') ? text.split('peer=')[1] : text;
-                connectToPeer(id);
-                toggleScanner(false);
-            }, () => {});
-        } else { if(html5QrCode) { await html5QrCode.stop(); html5QrCode = null; } sv.classList.remove('active'); dv.classList.add('active'); }
+        handleConnection();
     };
 
     init();
-    return { 
-        stageFiles, openPreview, toggleScanner, connectToPeer,
-        closePreview: () => { document.getElementById('preview-modal').style.display = 'none'; document.getElementById('preview-body').innerHTML = ''; },
-        copyID: () => { navigator.clipboard.writeText(document.getElementById('my-id').innerText); alert("ID Copied"); },
-        downloadFile: (id) => { 
-            const item = cache.get(id); if(!item) return;
-            const a = document.createElement('a'); a.href = item.data; a.download = item.name; a.click(); 
-        }
+
+    return {
+        stageFiles,
+        openPreview: (id) => {
+            const item = cache.get(id);
+            if (!item) return;
+            const body = document.getElementById('preview-body');
+            body.innerHTML = '';
+            if (item.type.startsWith('image/')) body.innerHTML = `<img src="${item.data}">`;
+            else if (item.type.startsWith('video/')) body.innerHTML = `<video controls autoplay src="${item.data}"></video>`;
+            else body.innerHTML = `<iframe src="${item.data}" style="width:100%; height:100%; border:none; background:#fff;"></iframe>`;
+            
+            document.getElementById('modal-dl-btn').onclick = () => {
+                const a = document.createElement('a'); a.href = item.data; a.download = item.name; a.click();
+            };
+            document.getElementById('preview-modal').style.display = 'flex';
+        },
+        deleteItem: (id) => {
+            removeLocal(id);
+            if (conn && conn.open) conn.send({ type: 'DELETE_SIGNAL', id });
+        },
+        clearAll: () => {
+            wipeLocal();
+            if (conn && conn.open) conn.send({ type: 'CLEAR_SIGNAL' });
+        },
+        closePreview: () => { document.getElementById('preview-modal').style.display = 'none'; },
+        toggleScanner: async (on) => {
+            const sv = document.getElementById('scanner-view'), dv = document.getElementById('qr-display');
+            if(on) {
+                dv.classList.remove('active'); sv.classList.add('active');
+                const scanner = new Html5Qrcode("interactive-reader");
+                scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+                    const id = text.includes('peer=') ? text.split('peer=')[1] : text;
+                    connectToPeer(id);
+                    scanner.stop();
+                    sv.classList.remove('active'); dv.classList.add('active');
+                });
+            } else { sv.classList.remove('active'); dv.classList.add('active'); }
+        },
+        copyID: () => { navigator.clipboard.writeText(document.getElementById('my-id').innerText); alert("ID Copied"); }
     };
 })();
 </script>
